@@ -17,6 +17,9 @@ export interface UserPreferences {
   // Autonomy
   autonomyLevel: number;
   confidenceThreshold: number;
+  // Offline Mode
+  offlineMode: boolean;
+  localModelName: string;
   // Other
   firstRun: boolean;
 }
@@ -27,8 +30,6 @@ export class Preferences {
   private filePath: string;
 
   private constructor() {
-    // In a real Electron app, we'd use app.getPath('userData')
-    // For this environment, we'll use a local .jarvis directory in home
     const userData = path.join(process.env.HOME || '/home/ubuntu', '.jarvis');
     if (!fs.existsSync(userData)) {
       fs.mkdirSync(userData, { recursive: true });
@@ -62,6 +63,8 @@ export class Preferences {
       responseStyle: 'auto',
       autonomyLevel: 0.7,
       confidenceThreshold: 0.75,
+      offlineMode: false,
+      localModelName: 'phi3:mini',
       firstRun: true
     };
   }
@@ -98,14 +101,6 @@ export class Preferences {
       await keytar.setPassword(SERVICE_NAME, provider, key);
     } catch (error) {
       console.error(`Failed to set ${provider} API key in keychain:`, error);
-    }
-  }
-
-  async deleteApiKey(provider: 'gemini' | 'openai'): Promise<void> {
-    try {
-      await keytar.deletePassword(SERVICE_NAME, provider);
-    } catch (error) {
-      console.error(`Failed to delete ${provider} API key from keychain:`, error);
     }
   }
 }
