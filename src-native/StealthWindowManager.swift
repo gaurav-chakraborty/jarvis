@@ -9,6 +9,9 @@ class StealthWindowManager: NSObject {
     private var isVisible = true
     private var stealthMode: StealthMode = .transparent
     private var clickThroughEnabled = true
+    private var streamingClient: StreamingClient?
+    private var isScreenSharingActive = false
+    private var autoHideTimer: Timer?
     
     enum StealthMode {
         case transparent      // Fully transparent background
@@ -25,6 +28,15 @@ class StealthWindowManager: NSObject {
             backing: .buffered,
             defer: false
         )
+        
+        // Initialize streaming client
+        streamingClient = StreamingClient()
+        streamingClient?.connect { [weak self] chunk in
+            self?.handleStreamingChunk(chunk)
+        }
+        
+        // Start screen sharing detection
+        startScreenSharingDetection()
         
         // 🚨 ULTIMATE STEALTH CONFIGURATION
         panel.level = .screenSaver + 2  // Above everything but invisible to capture
@@ -145,6 +157,39 @@ class StealthWindowManager: NSObject {
     func toggleClickThrough() {
         clickThroughEnabled.toggle()
         floatingWindow?.ignoresMouseEvents = clickThroughEnabled
+    }
+    
+    private func handleStreamingChunk(_ chunk: String) {
+        DispatchQueue.main.async {
+            // Logic to update the SwiftUI view with the new chunk
+            // This would typically update a @Published property in an ObservableObject
+        }
+    }
+    
+    private func startScreenSharingDetection() {
+        Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            self?.checkScreenSharingStatus()
+        }
+    }
+    
+    private func checkScreenSharingStatus() {
+        // Use CGWindowListCopyWindowInfo to detect screen sharing apps
+        let options = CGWindowListOption(arrayLiteral: .excludeDesktopElements, .optionOnScreenOnly)
+        guard let windowList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else { return }
+        
+        let sharingApps = ["zoom.us", "Slack", "Microsoft Teams", "ScreenCaptureKit"]
+        let isSharing = windowList.contains { window in
+            guard let ownerName = window[kCGWindowOwnerName as String] as? String else { return false }
+            return sharingApps.contains { ownerName.contains($0) }
+        }
+        
+        if isSharing && !isScreenSharingActive {
+            isScreenSharingActive = true
+            setStealthMode(.peek) // Auto-hide when sharing starts
+        } else if !isSharing && isScreenSharingActive {
+            isScreenSharingActive = false
+            setStealthMode(.transparent) // Restore when sharing ends
+        }
     }
     
     func positionInCorner() {
@@ -485,4 +530,44 @@ struct ReasoningStep {
     let description: String
     let confidence: Float
     let timestamp: Date
+}
+
+// MARK: - Streaming Client
+class StreamingClient {
+    private var webSocket: URLSessionWebSocketTask?
+    private var onChunk: ((String) -> Void)?
+    
+    func connect(onChunk: @escaping (String) -> Void) {
+        self.onChunk = onChunk
+        let url = URL(string: "ws://localhost:8765")!
+        webSocket = URLSession.shared.webSocketTask(with: url)
+        webSocket?.resume()
+        receive()
+    }
+    
+    private func receive() {
+        webSocket?.receive { [weak self] result in
+            switch result {
+            case .success(let message):
+                switch message {
+                case .string(let text):
+                    if let data = text.data(using: .utf8),
+                       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let type = json["type"] as? String {
+                        if type == "chunk", let chunk = json["data"] as? String {
+                            self?.onChunk?(chunk)
+                        }
+                    }
+                default: break
+                }
+                self?.receive()
+            case .failure(let error):
+                print("WebSocket error: \(error)")
+                // Retry connection after delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                    self?.connect(onChunk: self?.onChunk ?? { _ in })
+                }
+            }
+        }
+    }
 }

@@ -2,11 +2,13 @@ import { IConfig, ILogger, LLMRequest, LLMResponse } from '../types/index';
 
 export class LLMService {
   private apiKey: string;
-  private model: string = 'gemini-pro';
+  private model: string = 'gemini-1.5-flash';
   private baseUrl: string = 'https://generativelanguage.googleapis.com/v1beta';
+  private maxRetries = 3;
 
   constructor(private config: IConfig, private logger: ILogger) {
     this.apiKey = config.geminiApiKey || process.env['GEMINI_API_KEY'] || '';
+    this.model = config.model || 'gemini-1.5-flash';
     if (!this.apiKey) {
       this.logger.warn('No Gemini API key found, using fallback responses');
     }
@@ -20,7 +22,7 @@ export class LLMService {
     const prompt = this.buildPrompt(request);
 
     try {
-      const responseText = await this.callGeminiAPI(prompt);
+      const responseText = await this.callGeminiWithRetry(prompt);
       return {
         text: responseText,
         confidence: this.calculateConfidence(responseText, request),
@@ -29,18 +31,98 @@ export class LLMService {
         metadata: { tokens: responseText.length, model: this.model },
       };
     } catch (error) {
-      this.logger.error('LLM API error:', error);
-      return this.generateFallbackResponse(request);
+      this.logger.error('LLM API error after retries:', error);
+      throw error; // Let the router handle the ultimate fallback
     }
   }
 
   async generateStreamingResponse(
     request: LLMRequest,
     onChunk: (chunk: string) => void
-  ): Promise<void> {
+  ): Promise<LLMResponse> {
+    if (!this.apiKey) {
+      const fallback = this.generateFallbackResponse(request);
+      onChunk(fallback.text);
+      return fallback;
+    }
+
     const prompt = this.buildPrompt(request);
-    const fullResponse = await this.callGeminiAPI(prompt);
-    onChunk(fullResponse);
+    const url = `${this.baseUrl}/models/${this.model}:streamGenerateContent?key=${this.apiKey}`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
+        })
+      });
+
+      if (!response.ok) throw new Error(`Streaming API error: ${response.status}`);
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No response body');
+
+      let fullText = '';
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        // Gemini streaming returns a JSON array of candidates
+        try {
+          const jsonStr = chunk.trim().replace(/^\[/, '').replace(/\]$/, '');
+          const parts = jsonStr.split('},{').map((p, i, a) => {
+            if (i > 0) p = '{' + p;
+            if (i < a.length - 1) p = p + '}';
+            return p;
+          });
+
+          for (const part of parts) {
+            const data = JSON.parse(part);
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) {
+              fullText += text;
+              onChunk(text);
+            }
+          }
+        } catch (e) {
+          // Handle potential partial JSON chunks
+        }
+      }
+
+      return {
+        text: fullText,
+        confidence: 0.85,
+        strategy: request.strategy.name,
+        timestamp: new Date(),
+        metadata: { model: this.model, streamed: true }
+      };
+    } catch (error) {
+      this.logger.error('Streaming error:', error);
+      // Fallback to non-streaming if streaming fails
+      return this.generateResponse(request);
+    }
+  }
+
+  private async callGeminiWithRetry(prompt: string): Promise<string> {
+    let lastError: any;
+    for (let i = 0; i <= this.maxRetries; i++) {
+      try {
+        if (i > 0) {
+          const delay = Math.pow(2, i) * 1000;
+          this.logger.info(`Retrying API request (attempt ${i}/${this.maxRetries}) in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+        return await this.callGeminiAPI(prompt);
+      } catch (error) {
+        lastError = error;
+        this.logger.warn(`API attempt ${i + 1} failed: ${error}`);
+      }
+    }
+    throw lastError;
   }
 
   private buildPrompt(request: LLMRequest): string {
