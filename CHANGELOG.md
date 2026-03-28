@@ -1,10 +1,10 @@
 # Changelog
 All notable changes to this project are documented here.
-Auto-generated from git commits — manual entries can be added above each version.
-*Last updated: 2026-03-28 15:28:56*
+*Last updated: 2026-03-28 19:29:04*
 ---
 
 ## [2026-03-28]
+- docs: auto-generate README, CHANGELOG, FILE_INDEX, ABOUT (Doc Bot)
 - Implement Timed Assessment Helper: Screen OCR, Question Parsing, and Auto-Selection (gaurav-chakraborty)
 - Finalize Jarvis: Dedicated Offline Mode, Optimized Latency, and Comprehensive Documentation (gaurav-chakraborty)
 - Implement advanced architectural optimizations: Speculative Pre-fetching, Vector-based Semantic Caching, and Multi-tiered Context Pruning (gaurav-chakraborty)
