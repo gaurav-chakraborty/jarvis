@@ -22,6 +22,12 @@ Jarvis is a high-performance, stealthy macOS application designed to provide rea
 - **Secure Storage**: API keys are stored in the macOS Keychain using `node-keytar`.
 - **Health Monitoring**: Background monitoring and self-healing for the audio and LLM engines.
 
+### 📝 Timed Assessment Helper
+- **Screen OCR**: Captures and extracts text from any region of the screen using macOS Vision framework.
+- **Question Parsing**: Automatically identifies MCQs, True/False, and Coding questions.
+- **Auto-Selection**: Physically simulates a mouse click on the correct answer in the UI, bypassing right-click restrictions.
+- **Explanation Layer**: Provides a detailed reasoning for every suggested answer to help you learn.
+
 ---
 
 ## 🛠️ Installation & Setup
@@ -69,6 +75,7 @@ Launch the app and open **Preferences** (`Cmd + ,`) to:
 
 ### **Keyboard Shortcuts**
 - `Cmd + Shift + J`: Toggle Overlay Visibility.
+- `Cmd + Shift + A`: Toggle Assessment Helper Mode.
 - `Cmd + ,`: Open Preferences.
 - `Cmd + K`: Clear current conversation context and memory.
 
