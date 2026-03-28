@@ -1,0 +1,135 @@
+name: Auto-Update Documentation
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+jobs:
+  update-docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for changelog
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Generate documentation
+        run: |
+          python3 << 'EOF'
+          import os
+          import json
+          import subprocess
+          from datetime import datetime
+          from pathlib import Path
+          
+          repo_path = Path('.')
+          repo_name = repo_path.name
+          
+          # Get git log
+          result = subprocess.run(
+              ["git", "log", "--oneline", "--date=short", "--format=%h|%ad|%s|%an"],
+              capture_output=True,
+              text=True,
+              timeout=10
+          )
+          commits = []
+          for line in result.stdout.strip().split('\n'):
+              if line:
+                  parts = line.split('|')
+                  if len(parts) >= 4:
+                      commits.append({
+                          'hash': parts[0],
+                          'date': parts[1],
+                          'message': parts[2],
+                          'author': parts[3]
+                      })
+          
+          # Generate FILE_INDEX.md
+          file_index_lines = [
+              "# File Index\n",
+              "Complete directory structure and file descriptions.\n",
+              "Auto-generated — do not edit manually.\n",
+              f"*Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n",
+              "---\n",
+          ]
+          
+          ignore_dirs = {'.git', '__pycache__', 'node_modules', '.next', 'dist', 'build', '.venv', 'venv', '.env', '.github'}
+          ignore_files = {'.gitignore', '.env', '.env.local', '.DS_Store', 'package-lock.json', 'yarn.lock'}
+          
+          files_by_dir = {}
+          for root, dirs, files in os.walk(repo_path):
+              dirs[:] = [d for d in dirs if d not in ignore_dirs]
+              rel_path = os.path.relpath(root, repo_path)
+              if rel_path == '.':
+                  rel_path = 'root'
+              
+              for file in files:
+                  if file not in ignore_files and not file.startswith('.'):
+                      full_path = os.path.join(root, file)
+                      rel_file_path = os.path.relpath(full_path, repo_path)
+                      
+                      if rel_path not in files_by_dir:
+                          files_by_dir[rel_path] = []
+                      
+                      try:
+                          size = os.path.getsize(full_path)
+                          size_str = f"{size/1024:.1f}KB" if size < 1024*1024 else f"{size/(1024*1024):.1f}MB"
+                          files_by_dir[rel_path].append((file, size_str))
+                      except:
+                          pass
+          
+          for dir_name in sorted(files_by_dir.keys()):
+              if dir_name != 'root':
+                  file_index_lines.append(f"\n## `{dir_name}/`\n")
+              else:
+                  file_index_lines.append("\n## Root Directory\n")
+              
+              for file_name, size_str in sorted(files_by_dir[dir_name]):
+                  file_index_lines.append(f"- **`{file_name}`** ({size_str})\n")
+          
+          # Generate CHANGELOG.md
+          changelog_lines = [
+              "# Changelog\n",
+              "All notable changes to this project are documented here.\n",
+              f"*Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n",
+              "---\n",
+          ]
+          
+          if commits:
+              current_date = None
+              for commit in commits[:100]:
+                  if commit['date'] != current_date:
+                      current_date = commit['date']
+                      changelog_lines.append(f"\n## [{current_date}]\n")
+                  changelog_lines.append(f"- {commit['message']} ({commit['author']})\n")
+          else:
+              changelog_lines.append("\n## [Unreleased]\n\nNo commits yet.\n")
+          
+          # Write files
+          Path('FILE_INDEX.md').write_text(''.join(file_index_lines))
+          Path('CHANGELOG.md').write_text(''.join(changelog_lines))
+          
+          print("✅ Documentation updated")
+          EOF
+
+      - name: Commit changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add FILE_INDEX.md CHANGELOG.md
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "docs: auto-update FILE_INDEX and CHANGELOG"
+            git push
+          fi
