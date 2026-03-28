@@ -1,9 +1,11 @@
 # Changelog
 All notable changes to this project are documented here.
-*Last updated: 2026-03-28 19:29:04*
+Auto-generated from git commits — manual entries can be added above each version.
+*Last updated: 2026-03-28 15:30:26*
 ---
 
 ## [2026-03-28]
+- docs: auto-update FILE_INDEX and CHANGELOG (GitHub Action)
 - docs: auto-generate README, CHANGELOG, FILE_INDEX, ABOUT (Doc Bot)
 - Implement Timed Assessment Helper: Screen OCR, Question Parsing, and Auto-Selection (gaurav-chakraborty)
 - Finalize Jarvis: Dedicated Offline Mode, Optimized Latency, and Comprehensive Documentation (gaurav-chakraborty)
