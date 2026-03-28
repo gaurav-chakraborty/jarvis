@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDisplayName</key>
+    <string>Jarvis</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.gaurav.jarvis</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>Jarvis</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>12.3</string>
+    <key>LSUIElement</key>
+    <true/>
+
+    <!-- Microphone access -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Jarvis needs microphone access to transcribe interview questions in real-time.</string>
+
+    <!-- Screen Recording (ScreenCaptureKit) -->
+    <key>NSScreenRecordingUsageDescription</key>
+    <string>Jarvis needs screen recording permission to capture system audio from video call applications.</string>
+
+    <!-- Speech Recognition -->
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Jarvis uses speech recognition to transcribe and analyze interview questions.</string>
+
+    <!-- Accessibility (for global hotkeys) -->
+    <key>NSAccessibilityUsageDescription</key>
+    <string>Jarvis requires accessibility permission to register global keyboard shortcuts.</string>
+
+    <!-- Sandboxing: disabled for system audio capture -->
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+    <key>com.apple.security.microphone</key>
+    <true/>
+    <key>com.apple.security.speech-recognition.client</key>
+    <true/>
+    <key>com.apple.security.network.client</key>
+    <true/>
+</dict>
+</plist>
