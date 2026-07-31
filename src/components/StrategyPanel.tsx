@@ -6,7 +6,7 @@ interface StrategyPanelProps {
   strategy: Strategy | null;
 }
 
-export function StrategyPanel({ strategy }: StrategyPanelProps) {
+const StrategyPanelComponent = ({ strategy }: StrategyPanelProps) => {
   if (!strategy) return null;
 
   return (
@@ -56,4 +56,6 @@ export function StrategyPanel({ strategy }: StrategyPanelProps) {
       </div>
     </div>
   );
-}
+};
+
+export const StrategyPanel = React.memo(StrategyPanelComponent);

@@ -8,12 +8,12 @@ interface AnswerPanelProps {
   copied?: boolean;
 }
 
-export function AnswerPanel({
+const AnswerPanelComponent = ({
   answer,
   isGenerating = false,
   onCopy,
   copied = false,
-}: AnswerPanelProps) {
+}: AnswerPanelProps) => {
   return (
     <div className="flex-1 flex flex-col p-4 border-t border-gray-700 bg-gray-800">
       <div className="flex items-center justify-between mb-3">
@@ -26,6 +26,7 @@ export function AnswerPanel({
             onClick={onCopy}
             className="p-1.5 hover:bg-gray-700 rounded transition-colors"
             title="Copy answer"
+            aria-label={copied ? 'Answer copied' : 'Copy answer'}
           >
             {copied ? (
               <Check className="w-4 h-4 text-green-400" />
@@ -52,4 +53,6 @@ export function AnswerPanel({
       </div>
     </div>
   );
-}
+};
+
+export const AnswerPanel = React.memo(AnswerPanelComponent);

@@ -6,7 +6,7 @@ interface PredictionDisplayProps {
   predictedIntent: PredictedIntent | null;
 }
 
-export function PredictionDisplay({ predictedIntent }: PredictionDisplayProps) {
+const PredictionDisplayComponent = ({ predictedIntent }: PredictionDisplayProps) => {
   if (!predictedIntent || predictedIntent.type === 'unknown') {
     return null;
   }
@@ -44,4 +44,6 @@ export function PredictionDisplay({ predictedIntent }: PredictionDisplayProps) {
       </div>
     </div>
   );
-}
+};
+
+export const PredictionDisplay = React.memo(PredictionDisplayComponent);
