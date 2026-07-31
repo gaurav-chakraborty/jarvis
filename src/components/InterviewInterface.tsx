@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Mic, MicOff } from 'lucide-react';
+import { Mic, MicOff, Sun, Moon } from 'lucide-react';
 import { InterviewAgent } from '../agent/InterviewAgent';
 import { InterviewContext } from '../types/agent';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
+import { useTheme } from '../hooks/useTheme';
 import { debounce } from '../utils/debounce';
 import { AgentStatus } from './AgentStatus';
 import { PredictionDisplay } from './PredictionDisplay';
@@ -24,6 +25,7 @@ export function InterviewInterface({
   const [currentAnswer, setCurrentAnswer] = useState<string | null>(null);
   const [finalQuestion, setFinalQuestion] = useState<string>('');
   const debouncedAnalyzeRef = useRef<((partial: string) => void) | null>(null);
+  const { effectiveTheme, toggleTheme } = useTheme();
 
   const analyzeInput = useCallback((partial: string) => {
     if (agent) {
@@ -114,13 +116,27 @@ export function InterviewInterface({
     <>
       <div className="flex flex-col h-screen bg-gray-900 text-white">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-700 bg-gray-800">
-          <h1 className="text-2xl font-bold">
-            Interview: <span className="text-blue-400">{interviewContext.roleTitle}</span>
-          </h1>
-          <p className="text-sm text-gray-400 mt-1">
-            {interviewContext.companyName} • Agentic Mode Active
-          </p>
+        <div className="px-6 py-4 border-b border-gray-700 bg-gray-800 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">
+              Interview: <span className="text-blue-400">{interviewContext.roleTitle}</span>
+            </h1>
+            <p className="text-sm text-gray-400 mt-1">
+              {interviewContext.companyName} • Agentic Mode Active
+            </p>
+          </div>
+          <button
+            onClick={toggleTheme}
+            className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+            aria-label={`Switch to ${effectiveTheme === 'dark' ? 'light' : 'dark'} mode`}
+            title={`Current: ${effectiveTheme} mode`}
+          >
+            {effectiveTheme === 'dark' ? (
+              <Sun className="w-5 h-5 text-yellow-400" />
+            ) : (
+              <Moon className="w-5 h-5 text-indigo-400" />
+            )}
+          </button>
         </div>
 
         {/* Main Content */}

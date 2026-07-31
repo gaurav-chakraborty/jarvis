@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
-import { Zap, Brain, AlertCircle, CheckCircle } from 'lucide-react';
+import { Zap, Brain, AlertCircle, CheckCircle, Sun, Moon } from 'lucide-react';
 import { InterviewContext } from '../types/agent';
+import { useTheme } from '../hooks/useTheme';
 
 interface InterviewSetupProps {
   onStart: (context: InterviewContext) => void;
@@ -117,8 +118,24 @@ export function InterviewSetup({ onStart }: InterviewSetupProps) {
     }
   }, [isFormValid, handleSubmit]);
 
+  const { effectiveTheme, toggleTheme } = useTheme();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white flex items-center justify-center p-6">
+      {/* Theme Toggle Button */}
+      <button
+        onClick={toggleTheme}
+        className="fixed top-6 right-6 p-2 hover:bg-gray-700 rounded-lg transition-colors"
+        aria-label={`Switch to ${effectiveTheme === 'dark' ? 'light' : 'dark'} mode`}
+        title={`Current: ${effectiveTheme} mode`}
+      >
+        {effectiveTheme === 'dark' ? (
+          <Sun className="w-6 h-6 text-yellow-400" />
+        ) : (
+          <Moon className="w-6 h-6 text-indigo-400" />
+        )}
+      </button>
+
       <div className="w-full max-w-2xl">
         {/* Header */}
         <div className="text-center mb-12">
