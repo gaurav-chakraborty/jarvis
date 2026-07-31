@@ -66,31 +66,34 @@ export class LLMService {
       let fullText = '';
       const decoder = new TextDecoder();
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        const chunk = decoder.decode(value);
-        // Gemini streaming returns a JSON array of candidates
-        try {
-          const jsonStr = chunk.trim().replace(/^\[/, '').replace(/\]$/, '');
-          const parts = jsonStr.split('},{').map((p, i, a) => {
-            if (i > 0) p = '{' + p;
-            if (i < a.length - 1) p = p + '}';
-            return p;
-          });
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-          for (const part of parts) {
-            const data = JSON.parse(part);
-            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) {
-              fullText += text;
-              onChunk(text);
+          const chunk = decoder.decode(value);
+          try {
+            const jsonStr = chunk.trim().replace(/^\[/, '').replace(/\]$/, '');
+            const parts = jsonStr.split('},{').map((p, i, a) => {
+              if (i > 0) p = '{' + p;
+              if (i < a.length - 1) p = p + '}';
+              return p;
+            });
+
+            for (const part of parts) {
+              const data = JSON.parse(part);
+              const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (text) {
+                fullText += text;
+                onChunk(text);
+              }
             }
+          } catch (e) {
+            this.logger.warn('Partial JSON chunk encountered, continuing...');
           }
-        } catch (e) {
-          // Handle potential partial JSON chunks
         }
+      } finally {
+        reader.cancel();
       }
 
       return {

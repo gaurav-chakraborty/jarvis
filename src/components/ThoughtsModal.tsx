@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { X } from 'lucide-react';
 import { InterviewAgent } from '../agent/InterviewAgent';
 
@@ -10,9 +10,11 @@ interface ThoughtsModalProps {
 export function ThoughtsModal({ agent, onClose }: ThoughtsModalProps) {
   if (!agent) return null;
 
-  const strategy = agent.getCurrentStrategy();
-  const memory = agent.getMemorySummary();
-  const predictedNext = agent.predictNextQuestion();
+  const { strategy, memory, predictedNext } = useMemo(() => ({
+    strategy: agent.getCurrentStrategy(),
+    memory: agent.getMemorySummary(),
+    predictedNext: agent.predictNextQuestion(),
+  }), [agent]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {

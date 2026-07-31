@@ -8,11 +8,11 @@ interface AgentStatusProps {
   onShowThoughts?: () => void;
 }
 
-export function AgentStatus({
+const AgentStatusComponent = ({
   state,
   confidence,
   onShowThoughts,
-}: AgentStatusProps) {
+}: AgentStatusProps) => {
   const getStateIcon = () => {
     switch (state) {
       case 'listening':
@@ -75,10 +75,13 @@ export function AgentStatus({
           onClick={onShowThoughts}
           className="p-1.5 hover:bg-gray-800 rounded transition-colors"
           title="View agent thoughts"
+          aria-label="Show agent thoughts and analysis"
         >
           <Brain className="w-4 h-4 text-purple-400" />
         </button>
       </div>
     </div>
   );
-}
+};
+
+export const AgentStatus = React.memo(AgentStatusComponent);
