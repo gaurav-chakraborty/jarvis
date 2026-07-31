@@ -13,7 +13,8 @@
     "start:native": "open /Applications/Jarvis.app",
     "build:cli": "tsc -p tsconfig.cli.json",
     "start:cli": "node dist-cli/index.js",
-    "dev:cli": "ts-node --project tsconfig.cli.json src/index.ts"
+    "dev:cli": "ts-node --project tsconfig.cli.json src/index.ts",
+    "maintain": "node scripts/maintain.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

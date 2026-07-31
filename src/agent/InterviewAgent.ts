@@ -1,6 +1,7 @@
 import { IntentPredictorAgent } from './IntentPredictorAgent';
 import { StrategistAgent } from './StrategistAgent';
 import { MemoryAgent } from './MemoryAgent';
+import { LLMService } from '../services/LLMService';
 import {
   AgentState,
   PredictedIntent,
@@ -16,6 +17,7 @@ export class InterviewAgent {
   private predictorAgent: IntentPredictorAgent;
   private strategistAgent: StrategistAgent;
   private memoryAgent: MemoryAgent;
+  private llmService: LLMService;
   private currentContext: InterviewContext;
   private interviewerProfiles: Map<string, InterviewerProfile> = new Map();
   private predictedIntent: PredictedIntent | null = null;
@@ -27,6 +29,7 @@ export class InterviewAgent {
     this.predictorAgent = new IntentPredictorAgent();
     this.strategistAgent = new StrategistAgent();
     this.memoryAgent = new MemoryAgent();
+    this.llmService = new LLMService();
 
     // Initialize interviewer profiles
     for (const name of context.interviewerNames) {
@@ -190,6 +193,34 @@ export class InterviewAgent {
 
   getPredictedIntent(): PredictedIntent | null {
     return this.predictedIntent;
+  }
+
+  async generateAnswer(text: string): Promise<string> {
+    if (!this.predictedIntent) {
+      this.predictedIntent = this.predictorAgent.predictIntent(text);
+    }
+
+    const strategy = this.strategistAgent.getCurrentStrategy();
+    const memories = this.memoryAgent.getShortTermMemory().slice(-3).map(m => ({
+      content: `Q: ${m.question}\nA: ${m.answer}`,
+      topic: m.topics[0] || 'general',
+      timestamp: m.timestamp || new Date(),
+    }));
+
+    const response = await this.llmService.generateResponse({
+      question: text,
+      intent: { type: this.predictedIntent.type, confidence: this.predictedIntent.confidence, keywords: [] },
+      strategy: { name: strategy.name, description: strategy.description, focus: [], talkingPoints: strategy.talkingPoints },
+      context: {
+        stage: this.currentContext.stage,
+        tone: 'professional',
+        constraints: [],
+        interviewerMood: 'neutral',
+      },
+      memories: memories,
+    });
+
+    return response.text;
   }
 
   getCurrentStrategy(): Strategy {

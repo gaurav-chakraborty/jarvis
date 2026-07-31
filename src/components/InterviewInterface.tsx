@@ -34,19 +34,12 @@ export function InterviewInterface({
     onTranscript: useCallback((partial) => {
       if (agent) {
         const analysis = agent.analyzeInput(partial);
-        if (analysis.predictedIntent.type !== 'unknown') {
-          // Generate mock answer based on question type
-          const mockAnswers: Record<string, string> = {
-            technical: 'I would approach this by first understanding the requirements, breaking it down into components, and then designing a scalable solution. For example, I\'d consider the architecture, choose appropriate technologies, and implement with optimization in mind.',
-            behavioral: 'In my previous role, I faced a similar situation. Here\'s how I handled it: First, I analyzed the problem. Then, I collaborated with my team to develop a solution. The result was a 30% improvement in our process.',
-            experience: 'I have significant experience with this. Throughout my career, I\'ve worked with various technologies and teams. This has taught me the importance of continuous learning and staying current with industry trends.',
-            motivation: 'I\'m interested in this opportunity because it aligns with my career goals and the work you\'re doing is fascinating. I believe my background in building scalable systems would be valuable here.',
-            personal: 'I value technical excellence and continuous improvement. I think that\'s important because it drives innovation and helps build better products.',
-            unknown: 'That\'s a great question. Let me think about that.',
-          };
-
-          const answer = mockAnswers[analysis.predictedIntent.type] || mockAnswers.unknown;
-          setCurrentAnswer(answer);
+        if (analysis.predictedIntent.type !== 'unknown' && analysis.confidence > 0.7) {
+          agent.generateAnswer(partial).then(answer => {
+            setCurrentAnswer(answer);
+          }).catch(err => {
+            console.error('Failed to generate answer:', err);
+          });
         }
       }
     }, [agent]),

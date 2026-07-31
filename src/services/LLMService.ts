@@ -126,49 +126,44 @@ export class LLMService {
   }
 
   private buildPrompt(request: LLMRequest): string {
-    const { question, intent, strategy, memories, knowledgeGraph } = request;
+    const { question, intent, strategy, memories, knowledgeGraph, context } = request;
 
-    let prompt = `You are Jarvis, an AI assistant helping during a job interview.\n\n`;
+    return `
+# IDENTITY
+You are Jarvis, a highly sophisticated AI assistant designed to provide real-time guidance during professional job interviews. Your goal is to help the candidate provide high-quality, authentic, and impactful answers.
 
-    if (memories && memories.length > 0) {
-      prompt += `Previous relevant interactions:\n`;
-      for (const memory of memories.slice(-2)) {
-        prompt += `- ${memory.content}\n`;
-      }
-      prompt += `\n`;
-    }
+# CONTEXT
+- **Interview Stage**: ${context?.stage || 'General'}
+- **Current Strategy**: ${strategy.name}
+- **Strategy Goal**: ${strategy.description}
+- **Intent Detected**: ${intent.type}
 
-    if (knowledgeGraph && knowledgeGraph.length > 0) {
-      prompt += `Relevant knowledge from your experience:\n`;
-      for (const item of knowledgeGraph.slice(-2)) {
-        prompt += `- ${item}\n`;
-      }
-      prompt += `\n`;
-    }
+${memories && memories.length > 0 ? `
+# RELEVANT MEMORY
+${memories.slice(-3).map(m => `- ${m.content}`).join('\n')}
+` : ''}
 
-    prompt += `Strategy to use: ${strategy.name} - ${strategy.description}\n\n`;
+${knowledgeGraph && knowledgeGraph.length > 0 ? `
+# EXPERTISE & KNOWLEDGE
+${knowledgeGraph.slice(-3).map(k => `- ${k}`).join('\n')}
+` : ''}
 
-    switch (intent.type) {
-      case 'technical':
-        prompt += `Provide a technically detailed answer with specific examples, metrics, and trade-offs.\n`;
-        break;
-      case 'experience':
-        prompt += `Use the STAR method (Situation, Task, Action, Result) with a concrete example.\n`;
-        break;
-      case 'behavioral':
-        prompt += `Share a specific story that demonstrates soft skills and problem-solving.\n`;
-        break;
-      case 'motivation':
-        prompt += `Connect your answer to the company's mission and your career goals.\n`;
-        break;
-      default:
-        break;
-    }
+# GUIDELINES
+1. **Authenticity**: Answers must sound human, not robotic. Use natural transitions.
+2. **Conciseness**: Keep the response between 45-90 seconds of speaking time (approx. 100-200 words).
+3. **Structure**: 
+   - If technical: Focus on architecture, trade-offs, and specific technologies.
+   - If behavioral/experience: Use a condensed STAR method (Situation, Task, Action, Result).
+   - If motivational: Align personal values with company mission.
+4. **Tone**: Maintain a professional yet approachable tone.
 
-    prompt += `\nInterview Question: ${question}\n\n`;
-    prompt += `Provide a natural, conversational answer that sounds human and authentic. Keep it concise (30-60 seconds when spoken).\n\nAnswer:`;
+# INTERVIEWER QUESTION
+"${question}"
 
-    return prompt;
+# RESPONSE FORMAT
+Provide only the suggested answer text. Do not include meta-commentary or labels.
+
+Answer:`;
   }
 
   private async callGeminiAPI(prompt: string): Promise<string> {
@@ -235,18 +230,28 @@ export class LLMService {
   }
 
   private calculateConfidence(response: string, request: LLMRequest): number {
-    let confidence = 0.7;
+    let confidence = 0.75;
 
-    if (response.length > 100) confidence += 0.1;
-    if (response.length > 200) confidence += 0.1;
-    if (/\d+%/.test(response)) confidence += 0.05;
-    if (/\d+ (million|thousand)/i.test(response)) confidence += 0.05;
+    // Penalty for too short responses
+    if (response.length < 50) confidence -= 0.2;
+    
+    // Bonus for well-structured content
+    if (response.length > 150) confidence += 0.05;
+    if (response.includes('\n')) confidence += 0.05;
+    
+    // Check for presence of key technical or action verbs
+    const actionVerbs = ['implemented', 'designed', 'led', 'optimized', 'solved', 'managed', 'developed'];
+    const hasActionVerb = actionVerbs.some(verb => response.toLowerCase().includes(verb));
+    if (hasActionVerb) confidence += 0.05;
 
-    const questionWords = new Set(request.question.toLowerCase().split(/\s+/));
+    // Semantic relevance check (simple word overlap)
+    const questionWords = new Set(request.question.toLowerCase().split(/\s+/).filter(w => w.length > 3));
     const responseWords = new Set(response.toLowerCase().split(/\s+/));
     const overlap = [...questionWords].filter(w => responseWords.has(w)).length;
-    confidence += Math.min(overlap / 20, 0.1);
+    const overlapRatio = questionWords.size > 0 ? overlap / questionWords.size : 0;
+    
+    confidence += Math.min(overlapRatio * 0.2, 0.1);
 
-    return Math.min(confidence, 0.95);
+    return Math.max(0.1, Math.min(confidence, 0.98));
   }
 }
