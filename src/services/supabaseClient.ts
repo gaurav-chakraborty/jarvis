@@ -81,37 +81,22 @@ export async function updateInterviewerProfile(
   interviewerName: string,
   profileData: Record<string, any>
 ) {
-  const { data: existing } = await supabase
+  const { data, error } = await supabase
     .from('interviewer_profiles')
+    .upsert(
+      {
+        interview_id: interviewId,
+        interviewer_name: interviewerName,
+        ...profileData,
+        last_updated: new Date().toISOString(),
+      },
+      { onConflict: 'interview_id,interviewer_name' }
+    )
     .select()
-    .eq('interview_id', interviewId)
-    .eq('interviewer_name', interviewerName)
-    .maybeSingle();
+    .single();
 
-  if (existing) {
-    const { data, error } = await supabase
-      .from('interviewer_profiles')
-      .update(profileData)
-      .eq('id', existing.id)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  } else {
-    const { data, error } = await supabase
-      .from('interviewer_profiles')
-      .insert([
-        {
-          interview_id: interviewId,
-          interviewer_name: interviewerName,
-          ...profileData,
-        },
-      ])
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  }
+  if (error) throw error;
+  return data;
 }
 
 export async function storeMemory(
@@ -122,46 +107,26 @@ export async function storeMemory(
   relevanceScore: number,
   associatedQuestions: string[]
 ) {
-  const { data: existing } = await supabase
+  const { data, error } = await supabase
     .from('agent_memories')
+    .upsert(
+      {
+        interview_id: interviewId,
+        topic,
+        memory_type: memoryType,
+        content,
+        relevance_score: relevanceScore,
+        associated_questions: associatedQuestions,
+        mention_count: 1,
+        last_mentioned: new Date().toISOString(),
+      },
+      { onConflict: 'interview_id,topic' }
+    )
     .select()
-    .eq('interview_id', interviewId)
-    .eq('topic', topic)
-    .maybeSingle();
+    .single();
 
-  if (existing) {
-    const { data, error } = await supabase
-      .from('agent_memories')
-      .update({
-        mention_count: existing.mention_count + 1,
-        last_mentioned: new Date(),
-        associated_questions: Array.from(
-          new Set([...existing.associated_questions, ...associatedQuestions])
-        ),
-      })
-      .eq('id', existing.id)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  } else {
-    const { data, error } = await supabase
-      .from('agent_memories')
-      .insert([
-        {
-          interview_id: interviewId,
-          topic,
-          memory_type: memoryType,
-          content,
-          relevance_score: relevanceScore,
-          associated_questions: associatedQuestions,
-        },
-      ])
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  }
+  if (error) throw error;
+  return data;
 }
 
 export async function storeConversationTurn(
@@ -197,35 +162,19 @@ export async function updateAdaptiveStrategy(
   interviewId: string,
   strategyData: Record<string, any>
 ) {
-  const { data: existing } = await supabase
+  const { data, error } = await supabase
     .from('adaptive_strategies')
+    .upsert(
+      {
+        interview_id: interviewId,
+        ...strategyData,
+        last_updated: new Date().toISOString(),
+      },
+      { onConflict: 'interview_id' }
+    )
     .select()
-    .eq('interview_id', interviewId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .single();
 
-  if (existing) {
-    const { data, error } = await supabase
-      .from('adaptive_strategies')
-      .update(strategyData)
-      .eq('id', existing.id)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  } else {
-    const { data, error } = await supabase
-      .from('adaptive_strategies')
-      .insert([
-        {
-          interview_id: interviewId,
-          ...strategyData,
-        },
-      ])
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  }
+  if (error) throw error;
+  return data;
 }

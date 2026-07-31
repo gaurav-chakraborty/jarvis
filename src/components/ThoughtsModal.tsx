@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
 import { InterviewAgent } from '../agent/InterviewAgent';
 
@@ -14,13 +14,36 @@ export function ThoughtsModal({ agent, onClose }: ThoughtsModalProps) {
   const memory = agent.getMemorySummary();
   const predictedNext = agent.predictNextQuestion();
 
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-gray-900 rounded-lg border border-gray-700 w-96 max-h-96 overflow-y-auto shadow-lg">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        className="bg-gray-900 rounded-lg border border-gray-700 w-96 max-h-96 overflow-y-auto shadow-lg"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="thoughts-modal-title"
+        onClick={e => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between p-4 border-b border-gray-700 sticky top-0 bg-gray-900">
-          <h3 className="text-lg font-semibold text-white">Agent Thoughts</h3>
+          <h3 id="thoughts-modal-title" className="text-lg font-semibold text-white">
+            Agent Thoughts
+          </h3>
           <button
             onClick={onClose}
+            aria-label="Close modal"
             className="p-1 hover:bg-gray-800 rounded transition-colors"
           >
             <X className="w-5 h-5" />

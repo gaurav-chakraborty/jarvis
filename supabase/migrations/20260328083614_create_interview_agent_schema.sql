@@ -282,3 +282,18 @@ CREATE POLICY "Users can manage strategies for their interviews"
   );
 
 CREATE INDEX idx_adaptive_strategies_interview_id ON adaptive_strategies(interview_id);
+CREATE INDEX idx_adaptive_strategies_interview_created ON adaptive_strategies(interview_id, created_at DESC);
+
+-- Composite indexes for performance optimization
+CREATE INDEX idx_agent_memories_interview_relevance ON agent_memories(interview_id, relevance_score DESC);
+CREATE INDEX idx_answers_interview_created ON answers(interview_id, created_at DESC);
+CREATE INDEX idx_questions_interview_asked ON questions(interview_id, asked_at DESC);
+CREATE INDEX idx_conversation_turns_interview_turn ON conversation_turns(interview_id, turn_number);
+
+-- Partial indexes for high-relevance memories
+CREATE INDEX idx_agent_memories_high_relevance ON agent_memories(interview_id, topic) WHERE relevance_score > 0.7;
+
+-- Unique constraints to prevent duplicates and enable efficient upserts
+ALTER TABLE agent_memories ADD CONSTRAINT unique_interview_topic UNIQUE(interview_id, topic);
+ALTER TABLE interviewer_profiles ADD CONSTRAINT unique_interview_interviewer UNIQUE(interview_id, interviewer_name);
+ALTER TABLE adaptive_strategies ADD CONSTRAINT unique_interview_strategy UNIQUE(interview_id);

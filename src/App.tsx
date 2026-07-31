@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { InterviewContext } from './types/agent';
 import { InterviewSetup } from './components/InterviewSetup';
 import { InterviewInterface } from './components/InterviewInterface';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 function App() {
   const [interviewContext, setInterviewContext] =
@@ -9,13 +10,19 @@ function App() {
 
   if (!interviewContext) {
     return (
-      <InterviewSetup
-        onStart={(context) => setInterviewContext(context)}
-      />
+      <ErrorBoundary>
+        <InterviewSetup
+          onStart={(context) => setInterviewContext(context)}
+        />
+      </ErrorBoundary>
     );
   }
 
-  return <InterviewInterface interviewContext={interviewContext} />;
+  return (
+    <ErrorBoundary>
+      <InterviewInterface interviewContext={interviewContext} />
+    </ErrorBoundary>
+  );
 }
 
 export default App;

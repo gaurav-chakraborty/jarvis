@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Mic, MicOff } from 'lucide-react';
 import { InterviewAgent } from '../agent/InterviewAgent';
 import { InterviewContext } from '../types/agent';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
+import { debounce } from '../utils/debounce';
 import { AgentStatus } from './AgentStatus';
 import { PredictionDisplay } from './PredictionDisplay';
 import { StrategyPanel } from './StrategyPanel';
@@ -22,6 +23,24 @@ export function InterviewInterface({
   const [copied, setCopied] = useState(false);
   const [currentAnswer, setCurrentAnswer] = useState<string | null>(null);
   const [finalQuestion, setFinalQuestion] = useState<string>('');
+  const debouncedAnalyzeRef = useRef<((partial: string) => void) | null>(null);
+
+  const analyzeInput = useCallback((partial: string) => {
+    if (agent) {
+      const analysis = agent.analyzeInput(partial);
+      if (analysis.predictedIntent.type !== 'unknown' && analysis.confidence > 0.7) {
+        agent.generateAnswer(partial).then(answer => {
+          setCurrentAnswer(answer);
+        }).catch(err => {
+          console.error('Failed to generate answer:', err);
+        });
+      }
+    }
+  }, [agent]);
+
+  useEffect(() => {
+    debouncedAnalyzeRef.current = debounce(analyzeInput, 300);
+  }, [analyzeInput]);
 
   const {
     transcript,
@@ -32,17 +51,10 @@ export function InterviewInterface({
     isBrowserSupportsSpeechRecognition,
   } = useSpeechRecognition({
     onTranscript: useCallback((partial) => {
-      if (agent) {
-        const analysis = agent.analyzeInput(partial);
-        if (analysis.predictedIntent.type !== 'unknown' && analysis.confidence > 0.7) {
-          agent.generateAnswer(partial).then(answer => {
-            setCurrentAnswer(answer);
-          }).catch(err => {
-            console.error('Failed to generate answer:', err);
-          });
-        }
+      if (debouncedAnalyzeRef.current) {
+        debouncedAnalyzeRef.current(partial);
       }
-    }, [agent]),
+    }, []),
     onFinalTranscript: useCallback((final) => {
       if (agent) {
         setFinalQuestion(prev => prev + final + ' ');
@@ -65,9 +77,14 @@ export function InterviewInterface({
     if (currentAnswer) {
       navigator.clipboard.writeText(currentAnswer);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
     }
   }, [currentAnswer]);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timeoutId = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(timeoutId);
+  }, [copied]);
 
   const toggleListening = () => {
     if (isListening) {
@@ -150,6 +167,8 @@ export function InterviewInterface({
 
           <button
             onClick={toggleListening}
+            aria-label={isListening ? 'Stop listening to interview' : 'Start listening to interview'}
+            aria-pressed={isListening}
             className={`flex items-center gap-2 px-6 py-2 rounded-lg font-medium transition-all ${
               isListening
                 ? 'bg-red-600 hover:bg-red-700'
