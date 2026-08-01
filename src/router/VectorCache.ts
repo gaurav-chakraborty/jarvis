@@ -9,12 +9,16 @@ interface VectorEntry {
   embedding: number[];
   response: LLMResponse;
   timestamp: number;
+  hits: number;
+  bucket: string;
 }
 
 export class VectorCache {
   private entries: VectorEntry[] = [];
   private cachePath: string;
-  private similarityThreshold = 0.92; // Higher threshold for vector matching
+  private similarityThreshold = 0.92;
+  private bucketIndex: Map<string, VectorEntry[]> = new Map();
+  private maxCandidates = 20;
 
   constructor(private dataPath: string, private logger: ILogger) {
     this.cachePath = path.join(dataPath, 'vector_cache.json');
@@ -23,11 +27,14 @@ export class VectorCache {
 
   async get(question: string): Promise<LLMResponse | null> {
     const queryEmbedding = await this.getEmbedding(question);
-    
+    const bucket = this.getBucket(queryEmbedding);
+
     let bestMatch: VectorEntry | null = null;
     let highestSimilarity = -1;
 
-    for (const entry of this.entries) {
+    const candidates = this.getCandidates(bucket, queryEmbedding);
+
+    for (const entry of candidates) {
       const sim = this.cosineSimilarity(queryEmbedding, entry.embedding);
       if (sim > highestSimilarity) {
         highestSimilarity = sim;
@@ -36,6 +43,7 @@ export class VectorCache {
     }
 
     if (bestMatch && highestSimilarity > this.similarityThreshold) {
+      bestMatch.hits++;
       this.logger.info(`[VectorCache] Hit: ${highestSimilarity.toFixed(4)} similarity`);
       return bestMatch.response;
     }
@@ -43,12 +51,67 @@ export class VectorCache {
     return null;
   }
 
+  private getCandidates(bucket: string, embedding: number[]): VectorEntry[] {
+    const candidates: VectorEntry[] = [];
+
+    const bucketEntries = this.bucketIndex.get(bucket) || [];
+    candidates.push(...bucketEntries.slice(0, this.maxCandidates));
+
+    if (candidates.length < this.maxCandidates) {
+      const adjacentBuckets = this.getAdjacentBuckets(bucket);
+      for (const adjacent of adjacentBuckets) {
+        const entries = this.bucketIndex.get(adjacent) || [];
+        for (const entry of entries) {
+          if (!candidates.includes(entry) && candidates.length < this.maxCandidates) {
+            candidates.push(entry);
+          }
+        }
+      }
+    }
+
+    if (candidates.length === 0) {
+      return this.getTopHitEntries(this.maxCandidates);
+    }
+
+    return candidates;
+  }
+
+  private getTopHitEntries(limit: number): VectorEntry[] {
+    return this.entries.sort((a, b) => b.hits - a.hits).slice(0, limit);
+  }
+
+  private getBucket(embedding: number[]): string {
+    const hash = embedding.slice(0, 4).map(v => Math.round(v * 10)).join('-');
+    return `bucket_${hash}`;
+  }
+
+  private getAdjacentBuckets(bucket: string): string[] {
+    return [bucket, `${bucket}_alt1`, `${bucket}_alt2`];
+  }
+
   async set(question: string, response: LLMResponse): Promise<void> {
     const embedding = await this.getEmbedding(question);
     const id = createHash('sha256').update(question).digest('hex').substring(0, 16);
-    
-    this.entries.unshift({ id, question, embedding, response, timestamp: Date.now() });
-    if (this.entries.length > 200) this.entries.pop();
+    const bucket = this.getBucket(embedding);
+
+    const entry: VectorEntry = { id, question, embedding, response, timestamp: Date.now(), hits: 0, bucket };
+    this.entries.unshift(entry);
+
+    if (!this.bucketIndex.has(bucket)) {
+      this.bucketIndex.set(bucket, []);
+    }
+    this.bucketIndex.get(bucket)!.unshift(entry);
+
+    if (this.entries.length > 200) {
+      const removed = this.entries.pop();
+      if (removed) {
+        const bucketEntries = this.bucketIndex.get(removed.bucket);
+        if (bucketEntries) {
+          const idx = bucketEntries.indexOf(removed);
+          if (idx > -1) bucketEntries.splice(idx, 1);
+        }
+      }
+    }
     await this.save();
   }
 
@@ -81,7 +144,23 @@ export class VectorCache {
     try {
       const data = await fs.readFile(this.cachePath, 'utf-8');
       this.entries = JSON.parse(data);
-    } catch { this.entries = []; }
+      this.rebuildBucketIndex();
+    } catch {
+      this.entries = [];
+      this.bucketIndex.clear();
+    }
+  }
+
+  private rebuildBucketIndex() {
+    this.bucketIndex.clear();
+    for (const entry of this.entries) {
+      const bucket = entry.bucket || this.getBucket(entry.embedding);
+      entry.bucket = bucket;
+      if (!this.bucketIndex.has(bucket)) {
+        this.bucketIndex.set(bucket, []);
+      }
+      this.bucketIndex.get(bucket)!.push(entry);
+    }
   }
 
   private async save() {

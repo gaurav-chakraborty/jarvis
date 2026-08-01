@@ -1,6 +1,9 @@
 import React, { useState, useCallback } from 'react';
-import { Zap, Brain, AlertCircle, CheckCircle } from 'lucide-react';
+import { Zap, Brain, AlertCircle, CheckCircle, Sun, Moon } from 'lucide-react';
 import { InterviewContext } from '../types/agent';
+import { useTheme } from '../hooks/useTheme';
+import { validateInput, sanitizeInput, VALIDATION_RULES } from '../utils/validation';
+import { logger } from '../utils/secureLogger';
 
 interface InterviewSetupProps {
   onStart: (context: InterviewContext) => void;
@@ -22,48 +25,56 @@ export function InterviewSetup({ onStart }: InterviewSetupProps) {
 
   const validateField = useCallback((field: keyof ValidationState, value: string): boolean => {
     const newErrors = { ...errors };
+    let isValid = true;
 
-    if (field === 'companyName') {
-      if (!value.trim()) {
-        newErrors.companyName = 'Company name is required';
-        return false;
+    try {
+      if (field === 'companyName') {
+        const result = validateInput(value, VALIDATION_RULES.companyName);
+        if (!result.valid) {
+          newErrors.companyName = result.error || 'Invalid company name';
+          isValid = false;
+        } else {
+          delete newErrors.companyName;
+        }
       }
-      if (value.length < 2) {
-        newErrors.companyName = 'Company name must be at least 2 characters';
-        return false;
+
+      if (field === 'roleTitle') {
+        const result = validateInput(value, VALIDATION_RULES.roleTitle);
+        if (!result.valid) {
+          newErrors.roleTitle = result.error || 'Invalid role title';
+          isValid = false;
+        } else {
+          delete newErrors.roleTitle;
+        }
       }
-      delete newErrors.companyName;
-      return true;
+
+      if (field === 'interviewers') {
+        const names = value.split(',').map(n => n.trim()).filter(n => n);
+        if (names.length === 0) {
+          newErrors.interviewers = 'At least one interviewer name is required';
+          isValid = false;
+        } else {
+          const invalidNames = names.filter(n => {
+            const result = validateInput(n, VALIDATION_RULES.interviewer);
+            return !result.valid;
+          });
+
+          if (invalidNames.length > 0) {
+            newErrors.interviewers = 'Each interviewer name must be 2-100 characters';
+            isValid = false;
+          } else {
+            delete newErrors.interviewers;
+          }
+        }
+      }
+    } catch (error) {
+      logger.error('Validation error', error as Error);
+      newErrors[field] = 'Validation failed';
+      isValid = false;
     }
 
-    if (field === 'roleTitle') {
-      if (!value.trim()) {
-        newErrors.roleTitle = 'Role title is required';
-        return false;
-      }
-      if (value.length < 3) {
-        newErrors.roleTitle = 'Role title must be at least 3 characters';
-        return false;
-      }
-      delete newErrors.roleTitle;
-      return true;
-    }
-
-    if (field === 'interviewers') {
-      const names = value.split(',').map(n => n.trim()).filter(n => n);
-      if (names.length === 0) {
-        newErrors.interviewers = 'At least one interviewer name is required';
-        return false;
-      }
-      if (names.some(n => n.length < 2)) {
-        newErrors.interviewers = 'Each interviewer name must be at least 2 characters';
-        return false;
-      }
-      delete newErrors.interviewers;
-      return true;
-    }
-
-    return true;
+    setErrors(newErrors);
+    return isValid;
   }, [errors]);
 
   const handleFieldChange = useCallback((field: keyof ValidationState, value: string) => {
@@ -88,22 +99,31 @@ export function InterviewSetup({ onStart }: InterviewSetupProps) {
       return;
     }
 
+    const sanitizedCompany = sanitizeInput(companyName);
+    const sanitizedRole = sanitizeInput(roleTitle);
     const interviewerNames = interviewers
       .split(',')
-      .map(name => name.trim())
+      .map(name => sanitizeInput(name.trim()))
       .filter(name => name);
 
     setIsLoading(true);
     try {
+      logger.info('Interview setup initiated', {
+        company: sanitizedCompany,
+        role: sanitizedRole,
+        interviewerCount: interviewerNames.length,
+      });
+
       await new Promise(resolve => setTimeout(resolve, 300));
       onStart({
-        companyName,
-        roleTitle,
+        companyName: sanitizedCompany,
+        roleTitle: sanitizedRole,
         interviewerNames,
         currentPhase: 'opening',
         totalQuestionsAsked: 0,
       });
-    } finally {
+    } catch (error) {
+      logger.error('Setup submission failed', error as Error);
       setIsLoading(false);
     }
   };
@@ -117,8 +137,24 @@ export function InterviewSetup({ onStart }: InterviewSetupProps) {
     }
   }, [isFormValid, handleSubmit]);
 
+  const { effectiveTheme, toggleTheme } = useTheme();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white flex items-center justify-center p-6">
+      {/* Theme Toggle Button */}
+      <button
+        onClick={toggleTheme}
+        className="fixed top-6 right-6 p-2 hover:bg-gray-700 rounded-lg transition-colors"
+        aria-label={`Switch to ${effectiveTheme === 'dark' ? 'light' : 'dark'} mode`}
+        title={`Current: ${effectiveTheme} mode`}
+      >
+        {effectiveTheme === 'dark' ? (
+          <Sun className="w-6 h-6 text-yellow-400" />
+        ) : (
+          <Moon className="w-6 h-6 text-indigo-400" />
+        )}
+      </button>
+
       <div className="w-full max-w-2xl">
         {/* Header */}
         <div className="text-center mb-12">

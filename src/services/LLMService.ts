@@ -1,4 +1,5 @@
 import { IConfig, ILogger, LLMRequest, LLMResponse } from '../types/index';
+import { withTimeout, withRetry } from '../utils/requestHandler';
 
 export class LLMService {
   private apiKey: string;
@@ -47,16 +48,23 @@ export class LLMService {
     }
 
     const prompt = this.buildPrompt(request);
-    const url = `${this.baseUrl}/models/${this.model}:streamGenerateContent?key=${this.apiKey}`;
-    
+    const url = `${this.baseUrl}/models/${this.model}:streamGenerateContent`;
+
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }]
-        })
-      });
+      const response = await withTimeout(
+        (signal) => fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': this.apiKey,
+          },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }]
+          }),
+          signal,
+        }),
+        45000
+      );
 
       if (!response.ok) throw new Error(`Streaming API error: ${response.status}`);
 
@@ -66,31 +74,34 @@ export class LLMService {
       let fullText = '';
       const decoder = new TextDecoder();
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        const chunk = decoder.decode(value);
-        // Gemini streaming returns a JSON array of candidates
-        try {
-          const jsonStr = chunk.trim().replace(/^\[/, '').replace(/\]$/, '');
-          const parts = jsonStr.split('},{').map((p, i, a) => {
-            if (i > 0) p = '{' + p;
-            if (i < a.length - 1) p = p + '}';
-            return p;
-          });
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-          for (const part of parts) {
-            const data = JSON.parse(part);
-            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) {
-              fullText += text;
-              onChunk(text);
+          const chunk = decoder.decode(value);
+          try {
+            const jsonStr = chunk.trim().replace(/^\[/, '').replace(/\]$/, '');
+            const parts = jsonStr.split('},{').map((p, i, a) => {
+              if (i > 0) p = '{' + p;
+              if (i < a.length - 1) p = p + '}';
+              return p;
+            });
+
+            for (const part of parts) {
+              const data = JSON.parse(part);
+              const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (text) {
+                fullText += text;
+                onChunk(text);
+              }
             }
+          } catch (e) {
+            this.logger.warn('Partial JSON chunk encountered, continuing...');
           }
-        } catch (e) {
-          // Handle potential partial JSON chunks
         }
+      } finally {
+        reader.cancel();
       }
 
       return {
@@ -102,27 +113,19 @@ export class LLMService {
       };
     } catch (error) {
       this.logger.error('Streaming error:', error);
-      // Fallback to non-streaming if streaming fails
       return this.generateResponse(request);
     }
   }
 
   private async callGeminiWithRetry(prompt: string): Promise<string> {
-    let lastError: any;
-    for (let i = 0; i <= this.maxRetries; i++) {
-      try {
-        if (i > 0) {
-          const delay = Math.pow(2, i) * 1000;
-          this.logger.info(`Retrying API request (attempt ${i}/${this.maxRetries}) in ${delay}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-        return await this.callGeminiAPI(prompt);
-      } catch (error) {
-        lastError = error;
-        this.logger.warn(`API attempt ${i + 1} failed: ${error}`);
+    return withRetry(
+      (signal) => this.callGeminiAPI(prompt, signal),
+      {
+        timeout: 30000,
+        maxRetries: this.maxRetries,
+        backoffMultiplier: 2,
       }
-    }
-    throw lastError;
+    );
   }
 
   private buildPrompt(request: LLMRequest): string {
@@ -166,8 +169,8 @@ Provide only the suggested answer text. Do not include meta-commentary or labels
 Answer:`;
   }
 
-  private async callGeminiAPI(prompt: string): Promise<string> {
-    const url = `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`;
+  private async callGeminiAPI(prompt: string, signal?: AbortSignal): Promise<string> {
+    const url = `${this.baseUrl}/models/${this.model}:generateContent`;
 
     const body = {
       contents: [{ parts: [{ text: prompt }] }],
@@ -185,8 +188,12 @@ Answer:`;
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': this.apiKey,
+      },
       body: JSON.stringify(body),
+      signal,
     });
 
     if (!response.ok) {

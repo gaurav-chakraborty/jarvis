@@ -4,12 +4,24 @@ import { AlertCircle, RotateCw } from 'lucide-react';
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
+  level?: 'page' | 'component';
+  onError?: (error: Error, errorInfo: ErrorInfo) => void;
 }
 
 interface State {
   hasError: boolean;
   error: Error | null;
   errorInfo: ErrorInfo | null;
+  retryCount: number;
+}
+
+function categorizeError(error: Error): string {
+  const message = error.message.toLowerCase();
+  if (message.includes('network') || message.includes('fetch')) return 'network';
+  if (message.includes('timeout')) return 'timeout';
+  if (message.includes('permission') || message.includes('unauthorized')) return 'auth';
+  if (message.includes('not found')) return 'notfound';
+  return 'unknown';
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -19,6 +31,7 @@ export class ErrorBoundary extends Component<Props, State> {
       hasError: false,
       error: null,
       errorInfo: null,
+      retryCount: 0,
     };
   }
 
@@ -27,11 +40,19 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Error caught by boundary:', error, errorInfo);
+    const errorCategory = categorizeError(error);
+    const level = this.props.level || 'page';
+
+    console.error(`[${level.toUpperCase()}] ${errorCategory} error:`, error, errorInfo);
+
     this.setState({
       error,
       errorInfo,
     });
+
+    if (this.props.onError) {
+      this.props.onError(error, errorInfo);
+    }
   }
 
   handleReset = () => {
@@ -39,13 +60,37 @@ export class ErrorBoundary extends Component<Props, State> {
       hasError: false,
       error: null,
       errorInfo: null,
+      retryCount: this.state.retryCount + 1,
     });
+  };
+
+  getErrorMessage = (): string => {
+    const { error } = this.state;
+    if (!error) return 'An unexpected error occurred';
+
+    const category = categorizeError(error);
+    const messages: Record<string, string> = {
+      network: 'Network connection failed. Please check your internet and try again.',
+      timeout: 'Request timed out. The server took too long to respond.',
+      auth: 'Authentication failed. Please log in again.',
+      notfound: 'The requested resource was not found.',
+      unknown: error.message,
+    };
+
+    return messages[category] || error.message;
   };
 
   render() {
     if (this.state.hasError) {
-      return (
-        this.props.fallback || (
+      const level = this.props.level || 'page';
+      const isPageLevel = level === 'page';
+
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
+
+      if (isPageLevel) {
+        return (
           <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center p-4">
             <div className="max-w-md w-full">
               <div className="bg-gray-800 rounded-lg border border-red-600 p-6">
@@ -54,16 +99,14 @@ export class ErrorBoundary extends Component<Props, State> {
                   <h1 className="text-xl font-bold">Something went wrong</h1>
                 </div>
 
-                <p className="text-gray-300 mb-4 text-sm">
-                  {this.state.error?.message || 'An unexpected error occurred'}
-                </p>
+                <p className="text-gray-300 mb-4 text-sm">{this.getErrorMessage()}</p>
 
                 {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
                   <details className="mb-4">
                     <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-300">
-                      Error details
+                      Error details (Attempt #{this.state.retryCount})
                     </summary>
-                    <pre className="mt-2 text-xs bg-gray-900 p-2 rounded overflow-auto text-red-400">
+                    <pre className="mt-2 text-xs bg-gray-900 p-2 rounded overflow-auto text-red-400 max-h-40">
                       {this.state.errorInfo.componentStack}
                     </pre>
                   </details>
@@ -79,7 +122,25 @@ export class ErrorBoundary extends Component<Props, State> {
               </div>
             </div>
           </div>
-        )
+        );
+      }
+
+      return (
+        <div className="bg-red-900 bg-opacity-20 border border-red-600 rounded p-3 mb-2">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-red-300">Component Error</p>
+              <p className="text-xs text-red-200 mt-1">{this.getErrorMessage()}</p>
+            </div>
+            <button
+              onClick={this.handleReset}
+              className="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 rounded text-white flex-shrink-0"
+            >
+              <RotateCw className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
       );
     }
 

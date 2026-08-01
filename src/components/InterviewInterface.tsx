@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Mic, MicOff } from 'lucide-react';
+import { Mic, MicOff, Sun, Moon } from 'lucide-react';
 import { InterviewAgent } from '../agent/InterviewAgent';
 import { InterviewContext } from '../types/agent';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
+import { useTheme } from '../hooks/useTheme';
 import { debounce } from '../utils/debounce';
+import { logger } from '../utils/secureLogger';
+import { ErrorBoundary } from './ErrorBoundary';
 import { AgentStatus } from './AgentStatus';
 import { PredictionDisplay } from './PredictionDisplay';
 import { StrategyPanel } from './StrategyPanel';
@@ -24,16 +27,36 @@ export function InterviewInterface({
   const [currentAnswer, setCurrentAnswer] = useState<string | null>(null);
   const [finalQuestion, setFinalQuestion] = useState<string>('');
   const debouncedAnalyzeRef = useRef<((partial: string) => void) | null>(null);
+  const requestIdRef = useRef(0);
+  const isMountedRef = useRef(true);
+  const { effectiveTheme, toggleTheme } = useTheme();
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const analyzeInput = useCallback((partial: string) => {
     if (agent) {
-      const analysis = agent.analyzeInput(partial);
-      if (analysis.predictedIntent.type !== 'unknown' && analysis.confidence > 0.7) {
-        agent.generateAnswer(partial).then(answer => {
-          setCurrentAnswer(answer);
-        }).catch(err => {
-          console.error('Failed to generate answer:', err);
-        });
+      try {
+        const analysis = agent.analyzeInput(partial);
+        if (analysis.predictedIntent.type !== 'unknown' && analysis.confidence > 0.7) {
+          const requestId = ++requestIdRef.current;
+          agent.generateAnswer(partial).then(answer => {
+            if (isMountedRef.current && requestId === requestIdRef.current) {
+              setCurrentAnswer(answer);
+            }
+          }).catch(err => {
+            logger.error('Failed to generate answer', err);
+            if (isMountedRef.current && requestId === requestIdRef.current) {
+              setCurrentAnswer(null);
+            }
+          });
+        }
+      } catch (error) {
+        logger.error('Input analysis failed', error as Error);
       }
     }
   }, [agent]);
@@ -114,43 +137,67 @@ export function InterviewInterface({
     <>
       <div className="flex flex-col h-screen bg-gray-900 text-white">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-700 bg-gray-800">
-          <h1 className="text-2xl font-bold">
-            Interview: <span className="text-blue-400">{interviewContext.roleTitle}</span>
-          </h1>
-          <p className="text-sm text-gray-400 mt-1">
-            {interviewContext.companyName} • Agentic Mode Active
-          </p>
+        <div className="px-6 py-4 border-b border-gray-700 bg-gray-800 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">
+              Interview: <span className="text-blue-400">{interviewContext.roleTitle}</span>
+            </h1>
+            <p className="text-sm text-gray-400 mt-1">
+              {interviewContext.companyName} • Agentic Mode Active
+            </p>
+          </div>
+          <button
+            onClick={toggleTheme}
+            className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+            aria-label={`Switch to ${effectiveTheme === 'dark' ? 'light' : 'dark'} mode`}
+            title={`Current: ${effectiveTheme} mode`}
+          >
+            {effectiveTheme === 'dark' ? (
+              <Sun className="w-5 h-5 text-yellow-400" />
+            ) : (
+              <Moon className="w-5 h-5 text-indigo-400" />
+            )}
+          </button>
         </div>
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Agent Status */}
-          <AgentStatus
-            state={agent.getState()}
-            confidence={agent.getConfidence()}
-            onShowThoughts={() => setShowThoughts(true)}
-          />
+          <ErrorBoundary level="component">
+            <AgentStatus
+              state={agent.getState()}
+              confidence={agent.getConfidence()}
+              onShowThoughts={() => setShowThoughts(true)}
+            />
+          </ErrorBoundary>
 
           {/* Prediction Display */}
-          <PredictionDisplay predictedIntent={agent.getPredictedIntent()} />
+          <ErrorBoundary level="component">
+            <PredictionDisplay predictedIntent={agent.getPredictedIntent()} />
+          </ErrorBoundary>
 
           {/* Strategy Panel */}
-          <StrategyPanel strategy={agent.getCurrentStrategy()} />
+          <ErrorBoundary level="component">
+            <StrategyPanel strategy={agent.getCurrentStrategy()} />
+          </ErrorBoundary>
 
           {/* Question Display */}
-          <QuestionDisplay
-            question={finalQuestion || transcript}
-            isPartial={!finalQuestion && !!transcript}
-          />
+          <ErrorBoundary level="component">
+            <QuestionDisplay
+              question={finalQuestion || transcript}
+              isPartial={!finalQuestion && !!transcript}
+            />
+          </ErrorBoundary>
 
           {/* Answer Panel */}
-          <AnswerPanel
-            answer={currentAnswer}
-            isGenerating={!finalQuestion && !!transcript}
-            onCopy={handleCopyAnswer}
-            copied={copied}
-          />
+          <ErrorBoundary level="component">
+            <AnswerPanel
+              answer={currentAnswer}
+              isGenerating={!finalQuestion && !!transcript}
+              onCopy={handleCopyAnswer}
+              copied={copied}
+            />
+          </ErrorBoundary>
         </div>
 
         {/* Control Bar */}
