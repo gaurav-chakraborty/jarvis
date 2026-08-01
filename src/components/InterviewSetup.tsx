@@ -2,6 +2,8 @@ import React, { useState, useCallback } from 'react';
 import { Zap, Brain, AlertCircle, CheckCircle, Sun, Moon } from 'lucide-react';
 import { InterviewContext } from '../types/agent';
 import { useTheme } from '../hooks/useTheme';
+import { validateInput, sanitizeInput, VALIDATION_RULES } from '../utils/validation';
+import { logger } from '../utils/secureLogger';
 
 interface InterviewSetupProps {
   onStart: (context: InterviewContext) => void;
@@ -24,47 +26,54 @@ export function InterviewSetup({ onStart }: InterviewSetupProps) {
   const validateField = useCallback((field: keyof ValidationState, value: string): boolean => {
     const newErrors = { ...errors };
 
-    if (field === 'companyName') {
-      if (!value.trim()) {
-        newErrors.companyName = 'Company name is required';
-        return false;
+    try {
+      if (field === 'companyName') {
+        const result = validateInput(value, VALIDATION_RULES.companyName);
+        if (!result.valid) {
+          newErrors.companyName = result.error || 'Invalid company name';
+          return false;
+        }
+        delete newErrors.companyName;
+        return true;
       }
-      if (value.length < 2) {
-        newErrors.companyName = 'Company name must be at least 2 characters';
-        return false;
-      }
-      delete newErrors.companyName;
-      return true;
-    }
 
-    if (field === 'roleTitle') {
-      if (!value.trim()) {
-        newErrors.roleTitle = 'Role title is required';
-        return false;
+      if (field === 'roleTitle') {
+        const result = validateInput(value, VALIDATION_RULES.roleTitle);
+        if (!result.valid) {
+          newErrors.roleTitle = result.error || 'Invalid role title';
+          return false;
+        }
+        delete newErrors.roleTitle;
+        return true;
       }
-      if (value.length < 3) {
-        newErrors.roleTitle = 'Role title must be at least 3 characters';
-        return false;
-      }
-      delete newErrors.roleTitle;
-      return true;
-    }
 
-    if (field === 'interviewers') {
-      const names = value.split(',').map(n => n.trim()).filter(n => n);
-      if (names.length === 0) {
-        newErrors.interviewers = 'At least one interviewer name is required';
-        return false;
-      }
-      if (names.some(n => n.length < 2)) {
-        newErrors.interviewers = 'Each interviewer name must be at least 2 characters';
-        return false;
-      }
-      delete newErrors.interviewers;
-      return true;
-    }
+      if (field === 'interviewers') {
+        const names = value.split(',').map(n => n.trim()).filter(n => n);
+        if (names.length === 0) {
+          newErrors.interviewers = 'At least one interviewer name is required';
+          return false;
+        }
 
-    return true;
+        const invalidNames = names.filter(n => {
+          const result = validateInput(n, VALIDATION_RULES.interviewer);
+          return !result.valid;
+        });
+
+        if (invalidNames.length > 0) {
+          newErrors.interviewers = 'Each interviewer name must be 2-100 characters';
+          return false;
+        }
+
+        delete newErrors.interviewers;
+        return true;
+      }
+
+      return true;
+    } catch (error) {
+      logger.error('Validation error', error as Error);
+      newErrors[field] = 'Validation failed';
+      return false;
+    }
   }, [errors]);
 
   const handleFieldChange = useCallback((field: keyof ValidationState, value: string) => {
@@ -89,22 +98,31 @@ export function InterviewSetup({ onStart }: InterviewSetupProps) {
       return;
     }
 
+    const sanitizedCompany = sanitizeInput(companyName);
+    const sanitizedRole = sanitizeInput(roleTitle);
     const interviewerNames = interviewers
       .split(',')
-      .map(name => name.trim())
+      .map(name => sanitizeInput(name.trim()))
       .filter(name => name);
 
     setIsLoading(true);
     try {
+      logger.info('Interview setup initiated', {
+        company: sanitizedCompany,
+        role: sanitizedRole,
+        interviewerCount: interviewerNames.length,
+      });
+
       await new Promise(resolve => setTimeout(resolve, 300));
       onStart({
-        companyName,
-        roleTitle,
+        companyName: sanitizedCompany,
+        roleTitle: sanitizedRole,
         interviewerNames,
         currentPhase: 'opening',
         totalQuestionsAsked: 0,
       });
-    } finally {
+    } catch (error) {
+      logger.error('Setup submission failed', error as Error);
       setIsLoading(false);
     }
   };

@@ -1,26 +1,36 @@
 import { createClient } from '@supabase/supabase-js';
+import { withTimeout } from '../utils/requestHandler';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+async function withDbTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number = 10000
+): Promise<T> {
+  return withTimeout(promise, timeoutMs);
+}
+
 export async function createInterview(
   companyName: string,
   roleTitle: string,
   interviewerNames: string[]
 ) {
-  const { data, error } = await supabase
-    .from('interviews')
-    .insert([
-      {
-        company_name: companyName,
-        role_title: roleTitle,
-        interviewer_names: interviewerNames,
-      },
-    ])
-    .select()
-    .single();
+  const { data, error } = await withDbTimeout(
+    supabase
+      .from('interviews')
+      .insert([
+        {
+          company_name: companyName,
+          role_title: roleTitle,
+          interviewer_names: interviewerNames,
+        },
+      ])
+      .select()
+      .single()
+  );
 
   if (error) throw error;
   return data;
@@ -32,18 +42,20 @@ export async function storeQuestion(
   questionType: string,
   confidence: number
 ) {
-  const { data, error } = await supabase
-    .from('questions')
-    .insert([
-      {
-        interview_id: interviewId,
-        question_text: questionText,
-        predicted_type: questionType,
-        prediction_confidence: confidence,
-      },
-    ])
-    .select()
-    .single();
+  const { data, error } = await withDbTimeout(
+    supabase
+      .from('questions')
+      .insert([
+        {
+          interview_id: interviewId,
+          question_text: questionText,
+          predicted_type: questionType,
+          prediction_confidence: confidence,
+        },
+      ])
+      .select()
+      .single()
+  );
 
   if (error) throw error;
   return data;

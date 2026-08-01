@@ -1,4 +1,5 @@
 import { IConfig, ILogger, LLMRequest, LLMResponse } from '../types/index';
+import { withTimeout, withRetry } from '../utils/requestHandler';
 
 export class LLMService {
   private apiKey: string;
@@ -48,15 +49,17 @@ export class LLMService {
 
     const prompt = this.buildPrompt(request);
     const url = `${this.baseUrl}/models/${this.model}:streamGenerateContent?key=${this.apiKey}`;
-    
+
     try {
-      const response = await fetch(url, {
+      const fetchPromise = fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }]
         })
       });
+
+      const response = await withTimeout(fetchPromise, 45000);
 
       if (!response.ok) throw new Error(`Streaming API error: ${response.status}`);
 
@@ -105,27 +108,19 @@ export class LLMService {
       };
     } catch (error) {
       this.logger.error('Streaming error:', error);
-      // Fallback to non-streaming if streaming fails
       return this.generateResponse(request);
     }
   }
 
   private async callGeminiWithRetry(prompt: string): Promise<string> {
-    let lastError: any;
-    for (let i = 0; i <= this.maxRetries; i++) {
-      try {
-        if (i > 0) {
-          const delay = Math.pow(2, i) * 1000;
-          this.logger.info(`Retrying API request (attempt ${i}/${this.maxRetries}) in ${delay}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-        return await this.callGeminiAPI(prompt);
-      } catch (error) {
-        lastError = error;
-        this.logger.warn(`API attempt ${i + 1} failed: ${error}`);
+    return withRetry(
+      () => this.callGeminiAPI(prompt),
+      {
+        timeout: 30000,
+        maxRetries: this.maxRetries,
+        backoffMultiplier: 2,
       }
-    }
-    throw lastError;
+    );
   }
 
   private buildPrompt(request: LLMRequest): string {
@@ -186,11 +181,13 @@ Answer:`;
       ],
     };
 
-    const response = await fetch(url, {
+    const fetchPromise = fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
+
+    const response = await withTimeout(fetchPromise, 30000);
 
     if (!response.ok) {
       throw new Error(`Gemini API error: ${response.status}`);
