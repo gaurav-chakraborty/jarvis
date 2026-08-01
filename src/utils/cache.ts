@@ -1,3 +1,5 @@
+import { debugStats } from './debugStats';
+
 interface CacheEntry<T> {
   value: T;
   timestamp: number;
@@ -8,25 +10,39 @@ export class LRUCache<K, V> {
   private cache: Map<K, CacheEntry<V>> = new Map();
   private maxSize: number;
   private ttl: number;
+  private trackMetrics: boolean;
 
-  constructor(maxSize: number = 100, ttlMs: number = 300000) {
+  constructor(maxSize: number = 100, ttlMs: number = 300000, trackMetrics: boolean = true) {
     this.maxSize = maxSize;
     this.ttl = ttlMs;
+    this.trackMetrics = trackMetrics;
   }
 
   get(key: K): V | undefined {
     const entry = this.cache.get(key);
-    if (!entry) return undefined;
+    if (!entry) {
+      if (this.trackMetrics) {
+        debugStats.recordCacheMiss();
+      }
+      return undefined;
+    }
 
     const now = Date.now();
     if (now - entry.timestamp > this.ttl) {
       this.cache.delete(key);
+      if (this.trackMetrics) {
+        debugStats.recordCacheMiss();
+      }
       return undefined;
     }
 
     entry.hits++;
     this.cache.delete(key);
     this.cache.set(key, entry);
+
+    if (this.trackMetrics) {
+      debugStats.recordCacheHit();
+    }
 
     return entry.value;
   }

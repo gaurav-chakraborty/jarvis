@@ -1,3 +1,5 @@
+import { debugStats } from './debugStats';
+
 type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
 
 interface LogEntry {
@@ -76,6 +78,8 @@ class SecureLogger {
     if (this.logHistory.length > this.maxHistorySize) {
       this.logHistory.shift();
     }
+
+    debugStats.recordLog(level);
 
     const logFn = {
       DEBUG: console.debug,
