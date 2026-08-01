@@ -6,7 +6,6 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { DebugToolbar } from './components/DebugToolbar';
 import { useTheme } from './hooks/useTheme';
 import { setupApiInterceptor } from './utils/apiInterceptor';
-import { debugStats } from './utils/debugStats';
 
 function App() {
   const [interviewContext, setInterviewContext] =
@@ -47,7 +46,7 @@ function App() {
   return (
     <ErrorBoundary>
       <InterviewInterface interviewContext={interviewContext} />
-      {showDebugToolbar && <DebugToolbar stats={debugStats.getStats()} />}
+      {showDebugToolbar && <DebugToolbar />}
     </ErrorBoundary>
   );
 }

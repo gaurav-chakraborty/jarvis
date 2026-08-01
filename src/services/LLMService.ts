@@ -48,18 +48,23 @@ export class LLMService {
     }
 
     const prompt = this.buildPrompt(request);
-    const url = `${this.baseUrl}/models/${this.model}:streamGenerateContent?key=${this.apiKey}`;
+    const url = `${this.baseUrl}/models/${this.model}:streamGenerateContent`;
 
     try {
-      const fetchPromise = fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }]
-        })
-      });
-
-      const response = await withTimeout(fetchPromise, 45000);
+      const response = await withTimeout(
+        (signal) => fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': this.apiKey,
+          },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }]
+          }),
+          signal,
+        }),
+        45000
+      );
 
       if (!response.ok) throw new Error(`Streaming API error: ${response.status}`);
 
@@ -114,7 +119,7 @@ export class LLMService {
 
   private async callGeminiWithRetry(prompt: string): Promise<string> {
     return withRetry(
-      () => this.callGeminiAPI(prompt),
+      (signal) => this.callGeminiAPI(prompt, signal),
       {
         timeout: 30000,
         maxRetries: this.maxRetries,
@@ -164,8 +169,8 @@ Provide only the suggested answer text. Do not include meta-commentary or labels
 Answer:`;
   }
 
-  private async callGeminiAPI(prompt: string): Promise<string> {
-    const url = `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`;
+  private async callGeminiAPI(prompt: string, signal?: AbortSignal): Promise<string> {
+    const url = `${this.baseUrl}/models/${this.model}:generateContent`;
 
     const body = {
       contents: [{ parts: [{ text: prompt }] }],
@@ -181,13 +186,15 @@ Answer:`;
       ],
     };
 
-    const fetchPromise = fetch(url, {
+    const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': this.apiKey,
+      },
       body: JSON.stringify(body),
+      signal,
     });
-
-    const response = await withTimeout(fetchPromise, 30000);
 
     if (!response.ok) {
       throw new Error(`Gemini API error: ${response.status}`);

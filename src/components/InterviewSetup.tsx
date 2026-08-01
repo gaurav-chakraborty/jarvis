@@ -25,55 +25,56 @@ export function InterviewSetup({ onStart }: InterviewSetupProps) {
 
   const validateField = useCallback((field: keyof ValidationState, value: string): boolean => {
     const newErrors = { ...errors };
+    let isValid = true;
 
     try {
       if (field === 'companyName') {
         const result = validateInput(value, VALIDATION_RULES.companyName);
         if (!result.valid) {
           newErrors.companyName = result.error || 'Invalid company name';
-          return false;
+          isValid = false;
+        } else {
+          delete newErrors.companyName;
         }
-        delete newErrors.companyName;
-        return true;
       }
 
       if (field === 'roleTitle') {
         const result = validateInput(value, VALIDATION_RULES.roleTitle);
         if (!result.valid) {
           newErrors.roleTitle = result.error || 'Invalid role title';
-          return false;
+          isValid = false;
+        } else {
+          delete newErrors.roleTitle;
         }
-        delete newErrors.roleTitle;
-        return true;
       }
 
       if (field === 'interviewers') {
         const names = value.split(',').map(n => n.trim()).filter(n => n);
         if (names.length === 0) {
           newErrors.interviewers = 'At least one interviewer name is required';
-          return false;
+          isValid = false;
+        } else {
+          const invalidNames = names.filter(n => {
+            const result = validateInput(n, VALIDATION_RULES.interviewer);
+            return !result.valid;
+          });
+
+          if (invalidNames.length > 0) {
+            newErrors.interviewers = 'Each interviewer name must be 2-100 characters';
+            isValid = false;
+          } else {
+            delete newErrors.interviewers;
+          }
         }
-
-        const invalidNames = names.filter(n => {
-          const result = validateInput(n, VALIDATION_RULES.interviewer);
-          return !result.valid;
-        });
-
-        if (invalidNames.length > 0) {
-          newErrors.interviewers = 'Each interviewer name must be 2-100 characters';
-          return false;
-        }
-
-        delete newErrors.interviewers;
-        return true;
       }
-
-      return true;
     } catch (error) {
       logger.error('Validation error', error as Error);
       newErrors[field] = 'Validation failed';
-      return false;
+      isValid = false;
     }
+
+    setErrors(newErrors);
+    return isValid;
   }, [errors]);
 
   const handleFieldChange = useCallback((field: keyof ValidationState, value: string) => {

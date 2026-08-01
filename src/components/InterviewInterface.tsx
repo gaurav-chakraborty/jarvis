@@ -27,18 +27,32 @@ export function InterviewInterface({
   const [currentAnswer, setCurrentAnswer] = useState<string | null>(null);
   const [finalQuestion, setFinalQuestion] = useState<string>('');
   const debouncedAnalyzeRef = useRef<((partial: string) => void) | null>(null);
+  const requestIdRef = useRef(0);
+  const isMountedRef = useRef(true);
   const { effectiveTheme, toggleTheme } = useTheme();
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const analyzeInput = useCallback((partial: string) => {
     if (agent) {
       try {
         const analysis = agent.analyzeInput(partial);
         if (analysis.predictedIntent.type !== 'unknown' && analysis.confidence > 0.7) {
+          const requestId = ++requestIdRef.current;
           agent.generateAnswer(partial).then(answer => {
-            setCurrentAnswer(answer);
+            if (isMountedRef.current && requestId === requestIdRef.current) {
+              setCurrentAnswer(answer);
+            }
           }).catch(err => {
             logger.error('Failed to generate answer', err);
-            setCurrentAnswer(null);
+            if (isMountedRef.current && requestId === requestIdRef.current) {
+              setCurrentAnswer(null);
+            }
           });
         }
       } catch (error) {

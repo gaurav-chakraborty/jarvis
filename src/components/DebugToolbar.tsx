@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Settings, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { debugStats as debugStatsStore } from '../utils/debugStats';
 
 interface PerformanceMetric {
   name: string;
@@ -23,13 +24,23 @@ interface DebugStats {
   logCount: Record<string, number>;
 }
 
-interface DebugToolbarProps {
-  stats?: DebugStats;
-}
+const POLL_INTERVAL_MS = 1000;
 
-export const DebugToolbar = React.memo(({ stats }: DebugToolbarProps) => {
+export const DebugToolbar = React.memo(() => {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'performance' | 'api' | 'cache' | 'logs'>('performance');
+  const [stats, setStats] = useState<DebugStats>(() => debugStatsStore.getStats());
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    setStats(debugStatsStore.getStats());
+    const intervalId = setInterval(() => {
+      setStats(debugStatsStore.getStats());
+    }, POLL_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [isOpen]);
 
   const performanceStats = useMemo(() => {
     if (!stats?.metrics || stats.metrics.length === 0) {
@@ -43,18 +54,13 @@ export const DebugToolbar = React.memo(({ stats }: DebugToolbarProps) => {
     const max = Math.max(...durations);
 
     return { avg: Math.round(avg), min, max, count: stats.metrics.length };
-  }, [stats?.metrics]);
+  }, [stats]);
 
   const cacheStats = useMemo(() => {
-    if (!stats) return { total: 0, hitRate: 0 };
     const total = stats.cacheHits + stats.cacheMisses;
     const hitRate = total > 0 ? ((stats.cacheHits / total) * 100).toFixed(1) : 0;
     return { total, hitRate };
   }, [stats]);
-
-  if (!stats) {
-    return null;
-  }
 
   return (
     <div className="fixed bottom-4 right-4 z-50">

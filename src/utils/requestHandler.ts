@@ -4,12 +4,6 @@ interface RequestOptions {
   backoffMultiplier?: number;
 }
 
-interface RetryConfig {
-  attempt: number;
-  maxRetries: number;
-  backoffMultiplier: number;
-}
-
 export class RequestError extends Error {
   constructor(
     public code: 'timeout' | 'network' | 'unknown',
@@ -29,26 +23,32 @@ function getBackoffDelay(attempt: number, multiplier: number): number {
   return Math.min(1000 * Math.pow(multiplier, attempt), 30000);
 }
 
+/**
+ * Runs fn with a real AbortController-backed timeout: fn receives the signal
+ * and must pass it through to the underlying request (fetch, Supabase, etc.)
+ * so the in-flight request is actually cancelled, not just abandoned.
+ */
 export async function withTimeout<T>(
-  promise: Promise<T>,
+  fn: (signal: AbortSignal) => Promise<T>,
   timeoutMs: number
 ): Promise<T> {
-  let timeoutId: NodeJS.Timeout;
-  const timeoutPromise = new Promise<T>((_, reject) => {
-    timeoutId = setTimeout(() => {
-      reject(new RequestError('timeout', `Request timeout after ${timeoutMs}ms`));
-    }, timeoutMs);
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    return await Promise.race([promise, timeoutPromise]);
+    return await fn(controller.signal);
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new RequestError('timeout', `Request timeout after ${timeoutMs}ms`, error instanceof Error ? error : undefined);
+    }
+    throw error;
   } finally {
     clearTimeout(timeoutId);
   }
 }
 
 export async function withRetry<T>(
-  fn: () => Promise<T>,
+  fn: (signal: AbortSignal) => Promise<T>,
   options: RequestOptions = {}
 ): Promise<T> {
   const {
@@ -61,7 +61,7 @@ export async function withRetry<T>(
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      return await withTimeout(fn(), timeout);
+      return await withTimeout(fn, timeout);
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
 
@@ -89,7 +89,7 @@ export async function fetchWithRetry(
   } = options;
 
   return withRetry(
-    () => fetch(url, fetchOptions),
+    (signal) => fetch(url, { ...fetchOptions, signal }),
     { timeout, maxRetries, backoffMultiplier }
   );
 }
