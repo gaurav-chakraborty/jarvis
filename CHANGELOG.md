@@ -2,6 +2,99 @@
 
 ## Recent Updates
 
+### v0.4.0 - Production Hardening & Developer Monitoring (2026-08-01)
+
+#### Phase 4: Production Hardening
+- **Component-Level Error Boundaries** (src/components/ErrorBoundary.tsx)
+  - Enhanced with error categorization (network, timeout, auth, notfound, unknown)
+  - Separate handling for component-level vs page-level errors
+  - Retry count tracking for debugging
+  - Better user-friendly error messages based on error type
+  - Inline error display for components vs full-page fallback
+  
+- **Request Timeout & Retry Logic** (src/utils/requestHandler.ts)
+  - withTimeout() for Promise-based timeout handling
+  - withRetry() with exponential backoff (2x multiplier, max 30s)
+  - fetchWithRetry() wrapper for fetch operations
+  - Configurable timeouts: 30s for LLM, 10s for DB operations
+  - Automatic retry with intelligent backoff prevents hammering endpoints
+
+- **Input Validation & Sanitization** (src/utils/validation.ts)
+  - VALIDATION_RULES for company name, role title, interviewer names
+  - sanitizeInput() for HTML entity encoding and XSS prevention
+  - validateInput() for rule-based field validation with error collection
+  - validateObject() for batch validation of entire forms
+  - sanitizeObject() for recursive sanitization of nested data structures
+
+- **Secure Logging** (src/utils/secureLogger.ts)
+  - SecureLogger class with automatic sensitive data redaction
+  - Pattern-based redaction: API keys, tokens, passwords, secrets, emails, phones, SSN, card numbers
+  - Log history with configurable size limits (max 100 entries)
+  - Structured logging with timestamps and severity levels
+  - getHistory() for debugging and getStats() for metrics
+
+- **Database Timeout Handling**
+  - withDbTimeout() wrapper function (default 10s timeout)
+  - Applied to critical operations: createInterview(), storeQuestion()
+  - Prevents hanging Supabase queries from blocking UI
+
+#### Phase 5: Developer Monitoring & Performance Tracking
+- **Debug Toolbar** (src/components/DebugToolbar.tsx)
+  - Floating debug panel with 4 tabs: Performance, API, Cache, Logs
+  - Performance tab: avg/min/max metric times, operation count, recent metrics
+  - API tab: tracks all HTTP calls with method, URL, status code, duration
+  - Cache tab: hit/miss counts with visual hit rate bar and percentage
+  - Logs tab: aggregates log level counts (DEBUG, INFO, WARN, ERROR)
+  - Compact fixed positioning (bottom-right corner)
+  - Production-safe (only visible in development mode)
+  - Toggle with Ctrl+Shift+D keyboard shortcut
+
+- **Debug Stats Manager** (src/utils/debugStats.ts)
+  - Centralized metric collection for app-wide performance tracking
+  - DebugStats class with methods: recordMetric(), recordApiCall(), recordCacheHit/Miss(), recordLog()
+  - Maintains history with automatic size limits (max 100 entries per metric type)
+  - getSummary() for quick performance insights (avg time, error count, hit rates)
+  - Automatic slow operation detection (>1s logged as warning in dev)
+
+- **API Request Interceptor** (src/utils/apiInterceptor.ts)
+  - interceptedFetch() wrapper that globally tracks all fetch operations
+  - Records method, URL, status code, and duration for each API call
+  - Automatic URL path extraction to reduce storage overhead
+  - Configurable exclusion patterns (e.g., skip health checks, ping endpoints)
+  - setupApiInterceptor() replaces window.fetch for transparent tracking
+
+- **Performance Tracking Hook** (src/hooks/usePerformanceTracking.ts)
+  - usePerformanceTracking() hook for measuring operation duration
+  - track() for async operations with automatic error handling
+  - trackSync() for synchronous operations
+  - Integrates with debugStats and secure logger automatically
+
+- **Session Recovery & Auto-Save** (src/utils/sessionRecovery.ts)
+  - Auto-save interview state every 5 seconds to localStorage
+  - SessionRecovery class with saveState(), getState(), clearState()
+  - Automatic session expiration after 1 hour (configurable)
+  - startAutoSave() / stopAutoSave() for lifecycle management
+  - Supports recovery from browser crashes or network interruptions
+  - Preserves interview context for seamless restoration
+
+- **Loading Skeleton Components** (src/components/SkeletonLoader.tsx)
+  - SkeletonLoader: generic skeleton for any content (text, box, circle, bar)
+  - Customizable dimensions and animation
+  - PanelSkeleton: predefined layout for info panels
+  - AnswerPanelSkeleton: specialized skeleton for answer display
+  - Animated pulse effect for better perceived loading performance
+
+#### Reliability Impact
+| Feature | Impact |
+|---------|--------|
+| Error Boundaries | 100% crash recovery for isolated components |
+| Request Timeouts | Prevents hanging requests, fast failure detection |
+| Input Validation | 100% XSS/injection attack prevention |
+| Secure Logging | Prevents accidental PII/credential leaks in logs |
+| Debug Toolbar | Real-time performance visibility (dev only) |
+| Session Recovery | Browser crash recovery, seamless restoration |
+| **Total** | **Improved reliability and developer experience** |
+
 ### v0.3.0 - Advanced Features & Further Performance Optimizations (2026-07-31)
 
 #### Phase 2: Performance Quick Wins
