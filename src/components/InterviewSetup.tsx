@@ -50,9 +50,10 @@ export function InterviewSetup({ onStart }: InterviewSetupProps) {
 
       if (field === 'interviewers') {
         const names = value.split(',').map(n => n.trim()).filter(n => n);
+
+        // Interviewer names are helpful context, but they may not be known yet.
         if (names.length === 0) {
-          newErrors.interviewers = 'At least one interviewer name is required';
-          isValid = false;
+          delete newErrors.interviewers;
         } else {
           const invalidNames = names.filter(n => {
             const result = validateInput(n, VALIDATION_RULES.interviewer);
@@ -128,8 +129,7 @@ export function InterviewSetup({ onStart }: InterviewSetupProps) {
     }
   };
 
-  const isFormValid = companyName.trim() && roleTitle.trim() &&
-    interviewers.split(',').some(n => n.trim());
+  const isFormValid = companyName.trim() && roleTitle.trim();
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && isFormValid) {
@@ -162,9 +162,14 @@ export function InterviewSetup({ onStart }: InterviewSetupProps) {
             <Brain className="w-10 h-10 text-blue-400" />
             <h1 className="text-4xl font-bold">Agentic Interview Assistant</h1>
           </div>
-          <p className="text-xl text-gray-400">
-            Real-time AI-powered interview preparation with autonomous decision-making
+          <p className="text-xl text-gray-400 max-w-xl mx-auto">
+            Get calm, real-time support during your interview. Add the details you know now—you can leave interviewer names blank.
           </p>
+          <div className="flex items-center justify-center gap-2 mt-6 text-xs font-medium text-gray-400" aria-label="Setup progress">
+            <span className="flex items-center gap-2 text-blue-300"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white">1</span> Setup</span>
+            <span className="h-px w-10 bg-gray-600" />
+            <span className="flex items-center gap-2"><span className="flex h-5 w-5 items-center justify-center rounded-full border border-gray-600">2</span> Interview</span>
+          </div>
         </div>
 
         {/* Feature Highlights */}
@@ -208,10 +213,13 @@ export function InterviewSetup({ onStart }: InterviewSetupProps) {
           onKeyDown={handleKeyDown}
           className="bg-gray-800 rounded-lg border border-gray-700 p-8"
         >
-          <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-            <Zap className="w-6 h-6 text-yellow-400" />
-            Interview Configuration
-          </h2>
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold flex items-center gap-2">
+              <Zap className="w-6 h-6 text-yellow-400" />
+              Interview setup
+            </h2>
+            <p className="text-sm text-gray-400 mt-2">Tell Jarvis what you know. Only the company and role are required.</p>
+          </div>
 
           <div className="space-y-5">
             {/* Company Name */}
@@ -320,7 +328,7 @@ export function InterviewSetup({ onStart }: InterviewSetupProps) {
                 </p>
               ) : (
                 <p id="interviewers-hint" className="text-xs text-gray-400 mt-1">
-                  Comma-separated list of interviewer names (if known)
+                  Optional. Add names separated by commas if you know them
                 </p>
               )}
             </div>
@@ -366,7 +374,7 @@ export function InterviewSetup({ onStart }: InterviewSetupProps) {
           </button>
 
           <p className="text-xs text-gray-500 mt-2 text-center">
-            Tip: Press Ctrl+Enter to submit
+            Required fields are marked by the button becoming available · Press Ctrl+Enter to start
           </p>
         </form>
 
